@@ -25,19 +25,19 @@
     renderer.setClearColor(0x000000); // Черный фон
     renderer.outputEncoding = THREE.sRGBEncoding; // Gamma correction
     renderer.toneMapping = THREE.ACESFilmicToneMapping; // Tone mapping
-    renderer.toneMappingExposure = 0.7; // Экспозиция
+    renderer.toneMappingExposure = 1; // Экспозиция
     document.body.appendChild(renderer.domElement);
 
     // Загрузка HDRI-карты для освещения
     const rgbeLoader = new THREE.RGBELoader();
-    rgbeLoader.load('path_to_hdri.hdr', (texture) => {
+    rgbeLoader.load('./path_to_hdri.hdr', (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping; // Используем HDRI для освещения
         scene.environment = texture; // Устанавливаем HDRI-карту как источник освещения
     });
 
     // Загрузка модели GLTF/GLB
     const loader = new THREE.GLTFLoader();
-    loader.load('Pendants_new.glb', (gltf) => {
+    loader.load('./Pendants_new.glb', (gltf) => {
         const model = gltf.scene;
 
         // Применение материалов
@@ -88,4 +88,5 @@
 </script>
 </body>
 </html>
+
 
