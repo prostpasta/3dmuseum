@@ -176,6 +176,7 @@
         let isDetailView = false; // Detail view mode flag
         let previousCameraState = { position: null, target: null }; // Saved camera state
         let selectedObject = null; // Currently selected object for info
+        let initialTarget = new THREE.Vector3(); // To store initial target position
 
         loader.load('Pendants_new.glb', (gltf) => { // Relative path
             const rootModel = gltf.scene;
@@ -218,8 +219,10 @@
         detailControls.dampingFactor = 0.1;
         detailControls.minDistance = 1.5; // Minimum zoom in detailed view
         detailControls.maxDistance = 5; // Maximum zoom in detailed view
-        detailControls.enablePan = false; // Disable panning to prevent moving away from the object
+        detailControls.enablePan = true; // Enable panning
         detailControls.enableRotate = true; // Allow rotation
+        detailControls.enableZoom = true; // Allow zooming
+        detailControls.screenSpacePanning = false; // Panning in world space
         detailControls.enabled = false; // Disabled by default
 
         // Popup Elements
@@ -324,6 +327,9 @@
                     detailControls.enabled = true;
                     detailControls.target.copy(clickedObject.position);
                     
+                    // Store the initial target position for panning constraints
+                    initialTarget.copy(detailControls.target);
+
                     // Position the detail camera relative to the object
                     const boundingBox = new THREE.Box3().setFromObject(clickedObject);
                     const center = boundingBox.getCenter(new THREE.Vector3());
@@ -401,6 +407,28 @@
 
         // Handle clicks on the overlay to hide the main popup
         overlay.addEventListener('click', hidePopup);
+
+        // Implement panning constraints in detailed view
+        detailControls.addEventListener('change', () => {
+            if (isDetailView) {
+                const maxPanDistance = 2; // Maximum panning distance from initial target
+
+                // Calculate the current distance from the initial target
+                const currentTarget = detailControls.target.clone();
+                const distance = currentTarget.distanceTo(initialTarget);
+
+                if (distance > maxPanDistance) {
+                    // Clamp the target position
+                    const clampedTarget = initialTarget.clone().lerp(currentTarget, maxPanDistance / distance);
+                    detailControls.target.copy(clampedTarget);
+
+                    // Update the camera position accordingly
+                    const direction = detailCamera.position.clone().sub(detailControls.target).normalize();
+                    const newPosition = detailControls.target.clone().add(direction.multiplyScalar(detailCamera.position.distanceTo(detailControls.target)));
+                    detailCamera.position.copy(newPosition);
+                }
+            }
+        });
 
         // Main animation loop
         function animate() {
