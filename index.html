@@ -1,19 +1,16 @@
-<script>
-    const password = prompt("Password:");
-    if (password !== "prostomogy") {
-        document.body.innerHTML = "<h1>Доступ запрещён</h1>";
-    }
-</script>
-
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Museum with Viewing and Carousel</title>
+    <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <!-- GLTFLoader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.134/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- RGBELoader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.134/examples/js/loaders/RGBELoader.js"></script>
+    <!-- OrbitControls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.134/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: black; }
@@ -51,6 +48,79 @@
             display: none; /* Hidden by default */
             z-index: 9;
         }
+
+        /* Exit Button Styles */
+        #exitButton {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            cursor: pointer;
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+        }
+
+        #exitButton:hover {
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Info Button Styles */
+        #infoButton {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            cursor: pointer;
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+        }
+
+        #infoButton:hover {
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Information Popup Styles */
+        #infoPopup {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            background-color: rgba(30, 30, 30, 0.9);
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            display: none; /* Hidden by default */
+            max-width: 250px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 12;
+        }
+
+        @media (max-width: 600px) {
+            #exitButton, #infoButton {
+                width: 35px;
+                height: 35px;
+                font-size: 20px;
+            }
+
+            #infoPopup {
+                top: 80px;
+                right: 15px;
+                max-width: 200px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -64,135 +134,153 @@
         <p id="popup-description">Description: </p>
     </div>
 
-<script>
-    // Create the main scene, camera, and renderer
-    const scene = new THREE.Scene();
-    const mainCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    mainCamera.position.set(0, 2, 8);
+    <!-- Exit Button -->
+    <button id="exitButton">&times;</button>
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000); // Black background
-    renderer.outputEncoding = THREE.sRGBEncoding; // Gamma correction
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; // Tone mapping
-    renderer.toneMappingExposure = 0.6;
-    document.body.appendChild(renderer.domElement);
+    <!-- Info Button -->
+    <button id="infoButton">i</button>
 
-    // Load HDRI map for lighting
-    const rgbeLoader = new THREE.RGBELoader();
-    rgbeLoader.load('./path_to_hdri.hdr', (texture) => {
-        texture.mapping = THREE.EquirectangularReflectionMapping; // Use HDRI for lighting
-        scene.environment = texture; // Set HDRI map as the lighting source
-    });
+    <!-- Information Popup -->
+    <div id="infoPopup">
+        <h3 id="info-title">Title</h3>
+        <p id="info-year">Year: </p>
+        <p id="info-description">Description: </p>
+    </div>
 
-    // Load GLTF/GLB model
-    const loader = new THREE.GLTFLoader();
-    const spacing = 1; // Reduced spacing between objects
-    const objects = []; // Storage for carousel objects
-    let currentIndex = 0; // Current model index
-    let isDetailView = false; // Detail view mode flag
-    let previousCameraState = { position: null, target: null }; // Saved camera state
+    <script>
+        // Create the main scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const mainCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        mainCamera.position.set(0, 2, 8);
 
-    loader.load('./Pendants_new.glb', (gltf) => {
-        const rootModel = gltf.scene;
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000); // Black background
+        renderer.outputEncoding = THREE.sRGBEncoding; // Gamma correction
+        renderer.toneMapping = THREE.ACESFilmicToneMapping; // Tone mapping
+        renderer.toneMappingExposure = 0.6;
+        document.body.appendChild(renderer.domElement);
 
-        let index = 0;
-        rootModel.traverse((child) => {
-            if (child.isMesh) {
-                // Position objects in a row
-                child.position.set(index * spacing, 0, 0);
-
-                // Store metadata from userData
-                const metadata = child.userData;
-                const name = metadata?.name || "Unknown Name";
-                const year = metadata?.year || "Unknown Year";
-                const description = metadata?.description || "No Description";
-
-                // Optionally, you can store the metadata directly on the object for later use
-                child.userData = { name, year, description };
-
-                objects.push(child); // Add object to the array
-                index++;
-            }
+        // Load HDRI map for lighting using relative path
+        const rgbeLoader = new THREE.RGBELoader();
+        rgbeLoader.load('path_to_hdri.hdr', (texture) => { // Relative path
+            texture.mapping = THREE.EquirectangularReflectionMapping; // Use HDRI for lighting
+            scene.environment = texture; // Set HDRI map as the lighting source
         });
 
-        scene.add(rootModel);
-    });
+        // Load GLTF/GLB model using relative path
+        const loader = new THREE.GLTFLoader();
+        const spacing = 1; // Reduced spacing between objects
+        const objects = []; // Storage for carousel objects
+        let currentIndex = 0; // Current model index
+        let isDetailView = false; // Detail view mode flag
+        let previousCameraState = { position: null, target: null }; // Saved camera state
+        let selectedObject = null; // Currently selected object for info
 
-    // OrbitControls for the main scene
-    const mainControls = new THREE.OrbitControls(mainCamera, renderer.domElement);
-    mainControls.enableDamping = true;
-    mainControls.dampingFactor = 0.1;
-    mainControls.minDistance = 5; // Minimum zoom
-    mainControls.maxDistance = 15; // Maximum zoom
+        loader.load('Pendants_new.glb', (gltf) => { // Relative path
+            const rootModel = gltf.scene;
 
-    // Auxiliary camera for detailed view
-    const detailCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    detailCamera.position.set(0, 1, 3);
-    const detailControls = new THREE.OrbitControls(detailCamera, renderer.domElement);
-    detailControls.enableDamping = true;
-    detailControls.dampingFactor = 0.1;
-    detailControls.minDistance = 1.5; // Minimum zoom in detailed view
-    detailControls.maxDistance = 5; // Maximum zoom in detailed view
-    detailControls.enabled = false; // Disabled by default
+            let index = 0;
+            rootModel.traverse((child) => {
+                if (child.isMesh) {
+                    // Position objects in a row
+                    child.position.set(index * spacing, 0, 0);
 
-    // Popup Elements
-    const popup = document.getElementById('popup');
-    const overlay = document.getElementById('overlay');
-    const popupTitle = document.getElementById('popup-title');
-    const popupYear = document.getElementById('popup-year');
-    const popupDescription = document.getElementById('popup-description');
+                    // Store metadata from userData
+                    const metadata = child.userData;
+                    const name = metadata?.name || "Unknown Name";
+                    const year = metadata?.year || "Unknown Year";
+                    const description = metadata?.description || "No Description";
 
-    // Function to show popup with object details
-    function showPopup(object) {
-        const metadata = object.userData;
-        const name = metadata?.name || "Unknown Name";
-        const year = metadata?.year || "Unknown Year";
-        const description = metadata?.description || "No Description";
+                    // Optionally, you can store the metadata directly on the object for later use
+                    child.userData = { name, year, description };
 
-        popupTitle.textContent = name;
-        popupYear.textContent = `Year: ${year}`;
-        popupDescription.textContent = `Description: ${description}`;
+                    objects.push(child); // Add object to the array
+                    index++;
+                }
+            });
 
-        popup.style.display = 'block';
-        overlay.style.display = 'block';
-    }
+            scene.add(rootModel);
+        });
 
-    // Function to hide popup
-    function hidePopup() {
-        popup.style.display = 'none';
-        overlay.style.display = 'none';
-    }
+        // OrbitControls for the main scene
+        const mainControls = new THREE.OrbitControls(mainCamera, renderer.domElement);
+        mainControls.enableDamping = true;
+        mainControls.dampingFactor = 0.1;
+        mainControls.minDistance = 5; // Minimum zoom
+        mainControls.maxDistance = 15; // Maximum zoom
 
-    // Logic to switch between main and auxiliary cameras
-    window.addEventListener('click', (event) => {
-        // Only handle click if not in detail view
-        if (!isDetailView) {
-            const intersects = getIntersects(event.clientX, event.clientY);
-            if (intersects.length > 0) {
-                const clickedObject = intersects[0].object;
+        // Auxiliary camera for detailed view
+        const detailCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        detailCamera.position.set(0, 1, 3);
+        const detailControls = new THREE.OrbitControls(detailCamera, renderer.domElement);
+        detailControls.enableDamping = true;
+        detailControls.dampingFactor = 0.1;
+        detailControls.minDistance = 1.5; // Minimum zoom in detailed view
+        detailControls.maxDistance = 5; // Maximum zoom in detailed view
+        detailControls.enablePan = false; // Disable panning to prevent moving away from the object
+        detailControls.enableRotate = true; // Allow rotation
+        detailControls.enabled = false; // Disabled by default
 
-                // Save current camera state
-                previousCameraState.position = mainCamera.position.clone();
-                previousCameraState.target = mainControls.target.clone();
+        // Popup Elements
+        const popup = document.getElementById('popup');
+        const overlay = document.getElementById('overlay');
+        const popupTitle = document.getElementById('popup-title');
+        const popupYear = document.getElementById('popup-year');
+        const popupDescription = document.getElementById('popup-description');
 
-                // Switch to detailed view
-                isDetailView = true;
-                detailControls.enabled = true;
-                detailControls.target.copy(clickedObject.position);
-                detailCamera.position.set(clickedObject.position.x, clickedObject.position.y + 1, clickedObject.position.z + 3);
-            }
-        } else {
-            // If in detail view and popup is not open, clicking on empty space should hide the popup
-            if (popup.style.display === 'block') {
-                hidePopup();
-            }
+        // Exit Button Elements
+        const exitButton = document.getElementById('exitButton');
+
+        // Info Button Elements
+        const infoButton = document.getElementById('infoButton');
+        const infoPopup = document.getElementById('infoPopup');
+        const infoTitle = document.getElementById('info-title');
+        const infoYear = document.getElementById('info-year');
+        const infoDescription = document.getElementById('info-description');
+
+        // Function to show popup with object details
+        function showPopup(object) {
+            const metadata = object.userData;
+            const name = metadata?.name || "Unknown Name";
+            const year = metadata?.year || "Unknown Year";
+            const description = metadata?.description || "No Description";
+
+            popupTitle.textContent = name;
+            popupYear.textContent = `Year: ${year}`;
+            popupDescription.textContent = `Description: ${description}`;
+
+            popup.style.display = 'block';
+            overlay.style.display = 'block';
         }
-    });
 
-    // Handle exiting detailed view
-    window.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && isDetailView) {
+        // Function to hide popup
+        function hidePopup() {
+            popup.style.display = 'none';
+            overlay.style.display = 'none';
+        }
+
+        // Function to show info popup
+        function showInfoPopup(object) {
+            const metadata = object.userData;
+            const name = metadata?.name || "Unknown Name";
+            const year = metadata?.year || "Unknown Year";
+            const description = metadata?.description || "No Description";
+
+            infoTitle.textContent = name;
+            infoYear.textContent = `Year: ${year}`;
+            infoDescription.textContent = `Description: ${description}`;
+
+            infoPopup.style.display = 'block';
+        }
+
+        // Function to hide info popup
+        function hideInfoPopup() {
+            infoPopup.style.display = 'none';
+        }
+
+        // Handle Exit Button Click
+        exitButton.addEventListener('click', () => {
             // Restore previous camera state
             isDetailView = false;
             detailControls.enabled = false;
@@ -200,79 +288,142 @@
             mainCamera.position.copy(previousCameraState.position);
             mainControls.target.copy(previousCameraState.target);
 
-            // Hide popup if it's open
+            // Hide buttons and popups
+            exitButton.style.display = 'none';
+            infoButton.style.display = 'none';
             hidePopup();
+            hideInfoPopup();
+        });
+
+        // Handle Info Button Click
+        infoButton.addEventListener('click', () => {
+            if (selectedObject) {
+                if (infoPopup.style.display === 'block') {
+                    hideInfoPopup();
+                } else {
+                    showInfoPopup(selectedObject);
+                }
+            }
+        });
+
+        // Logic to switch between main and auxiliary cameras
+        window.addEventListener('click', (event) => {
+            // Only handle click if not in detail view
+            if (!isDetailView) {
+                const intersects = getIntersects(event.clientX, event.clientY);
+                if (intersects.length > 0) {
+                    const clickedObject = intersects[0].object;
+                    selectedObject = clickedObject;
+
+                    // Save current camera state
+                    previousCameraState.position = mainCamera.position.clone();
+                    previousCameraState.target = mainControls.target.clone();
+
+                    // Switch to detailed view
+                    isDetailView = true;
+                    detailControls.enabled = true;
+                    detailControls.target.copy(clickedObject.position);
+                    
+                    // Position the detail camera relative to the object
+                    const boundingBox = new THREE.Box3().setFromObject(clickedObject);
+                    const center = boundingBox.getCenter(new THREE.Vector3());
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const cameraOffset = maxDim * 2;
+                    detailCamera.position.set(center.x, center.y + cameraOffset / 2, center.z + cameraOffset);
+                    detailControls.update();
+
+                    // Show exit and info buttons
+                    exitButton.style.display = 'flex';
+                    infoButton.style.display = 'flex';
+                }
+            } else {
+                // If in detail view and info popup is not open, clicking on empty space should hide the info popup
+                const target = event.target;
+                if (target !== infoPopup && target !== infoButton) {
+                    hideInfoPopup();
+                }
+            }
+        });
+
+        // Handle exiting detailed view via Escape key
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && isDetailView) {
+                // Restore previous camera state
+                isDetailView = false;
+                detailControls.enabled = false;
+
+                mainCamera.position.copy(previousCameraState.position);
+                mainControls.target.copy(previousCameraState.target);
+
+                // Hide buttons and popups
+                exitButton.style.display = 'none';
+                infoButton.style.display = 'none';
+                hidePopup();
+                hideInfoPopup();
+            }
+        });
+
+        // Support for mobile devices (exit via swipe down)
+        let startY = 0;
+        window.addEventListener('touchstart', (event) => {
+            startY = event.touches[0].clientY;
+        });
+
+        window.addEventListener('touchend', (event) => {
+            const endY = event.changedTouches[0].clientY;
+            if (isDetailView && startY - endY > 50) {
+                // Return to the main scene
+                isDetailView = false;
+                detailControls.enabled = false;
+
+                mainCamera.position.copy(previousCameraState.position);
+                mainControls.target.copy(previousCameraState.target);
+
+                // Hide buttons and popups
+                exitButton.style.display = 'none';
+                infoButton.style.display = 'none';
+                hidePopup();
+                hideInfoPopup();
+            }
+        });
+
+        // Function to get intersected objects based on mouse coordinates
+        function getIntersects(x, y) {
+            const mouse = new THREE.Vector2();
+            mouse.x = (x / window.innerWidth) * 2 - 1;
+            mouse.y = -(y / window.innerHeight) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, isDetailView ? detailCamera : mainCamera);
+            return raycaster.intersectObjects(objects);
         }
-    });
 
-    // Support for mobile devices (exit via swipe down)
-    let startY = 0;
-    window.addEventListener('touchstart', (event) => {
-        startY = event.touches[0].clientY;
-    });
+        // Handle clicks on the overlay to hide the main popup
+        overlay.addEventListener('click', hidePopup);
 
-    window.addEventListener('touchend', (event) => {
-        const endY = event.changedTouches[0].clientY;
-        if (isDetailView && startY - endY > 50) {
-            // Return to the main scene
-            isDetailView = false;
-            detailControls.enabled = false;
+        // Main animation loop
+        function animate() {
+            requestAnimationFrame(animate);
 
-            mainCamera.position.copy(previousCameraState.position);
-            mainControls.target.copy(previousCameraState.target);
-
-            // Hide popup if it's open
-            hidePopup();
-        }
-    });
-
-    // Function to get intersected objects based on mouse coordinates
-    function getIntersects(x, y) {
-        const mouse = new THREE.Vector2();
-        mouse.x = (x / window.innerWidth) * 2 - 1;
-        mouse.y = -(y / window.innerHeight) * 2 + 1;
-
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(mouse, isDetailView ? detailCamera : mainCamera);
-        return raycaster.intersectObjects(objects);
-    }
-
-    // Handle double-click events for showing popup
-    window.addEventListener('dblclick', (event) => {
-        if (isDetailView) {
-            const intersects = getIntersects(event.clientX, event.clientY);
-            if (intersects.length > 0) {
-                const clickedObject = intersects[0].object;
-                showPopup(clickedObject);
+            if (isDetailView) {
+                detailControls.update();
+                renderer.render(scene, detailCamera);
+            } else {
+                mainControls.update();
+                renderer.render(scene, mainCamera);
             }
         }
-    });
+        animate();
 
-    // Handle clicks on the overlay to hide the popup
-    overlay.addEventListener('click', hidePopup);
-
-    // Main animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-
-        if (isDetailView) {
-            detailControls.update();
-            renderer.render(scene, detailCamera);
-        } else {
-            mainControls.update();
-            renderer.render(scene, mainCamera);
-        }
-    }
-    animate();
-
-    // Handle window resizing
-    window.addEventListener('resize', () => {
-        mainCamera.aspect = window.innerWidth / window.innerHeight;
-        mainCamera.updateProjectionMatrix();
-        detailCamera.aspect = window.innerWidth / window.innerHeight;
-        detailCamera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-</script>
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            mainCamera.aspect = window.innerWidth / window.innerHeight;
+            mainCamera.updateProjectionMatrix();
+            detailCamera.aspect = window.innerWidth / window.innerHeight;
+            detailCamera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
