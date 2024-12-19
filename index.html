@@ -223,6 +223,8 @@
         detailControls.enableRotate = true; // Allow rotation
         detailControls.enableZoom = true; // Allow zooming
         detailControls.screenSpacePanning = false; // Panning in world space
+        detailControls.minPolarAngle = Math.PI / 4; // Prevent camera from going below 45 degrees
+        detailControls.maxPolarAngle = Math.PI / 2; // Prevent camera from going above 90 degrees
         detailControls.enabled = false; // Disabled by default
 
         // Popup Elements
@@ -290,6 +292,7 @@
 
             mainCamera.position.copy(previousCameraState.position);
             mainControls.target.copy(previousCameraState.target);
+            mainControls.update();
 
             // Hide buttons and popups
             exitButton.style.display = 'none';
@@ -326,7 +329,7 @@
                     isDetailView = true;
                     detailControls.enabled = true;
                     detailControls.target.copy(clickedObject.position);
-                    
+
                     // Store the initial target position for panning constraints
                     initialTarget.copy(detailControls.target);
 
@@ -361,6 +364,7 @@
 
                 mainCamera.position.copy(previousCameraState.position);
                 mainControls.target.copy(previousCameraState.target);
+                mainControls.update();
 
                 // Hide buttons and popups
                 exitButton.style.display = 'none';
@@ -385,6 +389,7 @@
 
                 mainCamera.position.copy(previousCameraState.position);
                 mainControls.target.copy(previousCameraState.target);
+                mainControls.update();
 
                 // Hide buttons and popups
                 exitButton.style.display = 'none';
@@ -422,9 +427,10 @@
                     const clampedTarget = initialTarget.clone().lerp(currentTarget, maxPanDistance / distance);
                     detailControls.target.copy(clampedTarget);
 
-                    // Update the camera position accordingly
+                    // Update the camera position accordingly to maintain the same distance
                     const direction = detailCamera.position.clone().sub(detailControls.target).normalize();
-                    const newPosition = detailControls.target.clone().add(direction.multiplyScalar(detailCamera.position.distanceTo(detailControls.target)));
+                    const currentDistance = detailCamera.position.distanceTo(detailControls.target);
+                    const newPosition = detailControls.target.clone().add(direction.multiplyScalar(currentDistance));
                     detailCamera.position.copy(newPosition);
                 }
             }
