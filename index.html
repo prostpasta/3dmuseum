@@ -387,34 +387,6 @@
                 hideInfoPopup();
             }
         });
-
-        // *** Removed Swipe Exit Functionality ***
-        // The following touch event listeners have been removed to disable exiting detailed view via swipe gestures.
-        /*
-        let startY = 0;
-        window.addEventListener('touchstart', (event) => {
-            startY = event.touches[0].clientY;
-        });
-
-        window.addEventListener('touchend', (event) => {
-            const endY = event.changedTouches[0].clientY;
-            if (isDetailView && startY - endY > 50) {
-                // Return to the main scene
-                isDetailView = false;
-                detailControls.enabled = false;
-
-                mainCamera.position.copy(previousCameraState.position);
-                mainControls.target.copy(previousCameraState.target);
-
-                // Hide buttons and popups
-                exitButton.style.display = 'none';
-                infoButton.style.display = 'none';
-                hidePopup();
-                hideInfoPopup();
-            }
-        });
-        */
-
         // Function to get intersected objects based on mouse coordinates
         function getIntersects(x, y) {
             const mouse = new THREE.Vector2();
