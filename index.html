@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Museum with Centered Detailed View</title>
+    <title>3D Museum with Multiple Objects</title>
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <!-- GLTFLoader -->
@@ -66,8 +66,6 @@
             justify-content: center;
             z-index: 11;
             display: flex; /* Ensure flex layout */
-            align-items: center;
-            justify-content: center;
         }
 
         #exitButton:hover {
@@ -91,8 +89,6 @@
             justify-content: center;
             z-index: 11;
             display: flex; /* Ensure flex layout */
-            align-items: center;
-            justify-content: center;
         }
 
         #infoButton:hover {
@@ -127,6 +123,27 @@
                 max-width: 200px;
             }
         }
+
+        /* Loading Spinner */
+        #loader {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            z-index: 100;
+            transform: translate(-50%, -50%);
+            border: 16px solid #f3f3f3; 
+            border-radius: 50%;
+            border-top: 16px solid #000000; 
+            width: 120px;
+            height: 120px;
+            -webkit-animation: spin 2s linear infinite;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+          0% { transform: translate(-50%, -50%) rotate(0deg); }
+          100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -153,6 +170,9 @@
         <p id="info-description">Description: </p>
     </div>
 
+    <!-- Loader -->
+    <div id="loader"></div>
+
     <script>
         // Initialize Three.js scene, camera, renderer
         const scene = new THREE.Scene();
@@ -167,92 +187,206 @@
         renderer.toneMappingExposure = 0.6;
         document.body.appendChild(renderer.domElement);
 
+        // Loader element
+        const loaderElement = document.getElementById('loader');
+
+        let hdriLoaded = false;
+        let modelsLoaded = 0;
+
         // Load HDRI map for lighting using relative path
         const rgbeLoader = new THREE.RGBELoader();
-        rgbeLoader.load('path_to_hdri.hdr', (texture) => { // Replace with your HDRI file name
-            texture.mapping = THREE.EquirectangularReflectionMapping; // Use HDRI for lighting
-            scene.environment = texture; // Set HDRI map as the lighting source
+        rgbeLoader.load('path_to_hdri.hdr', (texture) => { 
+            texture.mapping = THREE.EquirectangularReflectionMapping; 
+            scene.environment = texture; 
+            hdriLoaded = true;
+            checkAllLoaded();
         }, undefined, (error) => {
             console.error('An error happened while loading the HDRI:', error);
+            hdriLoaded = true; // Even if error, consider it done
+            checkAllLoaded();
         });
 
-        // Load GLTF/GLB model using relative path
-        const loader = new THREE.GLTFLoader();
-        const spacing = 1; // Reduced spacing between objects
-        const objects = []; // Storage for carousel objects
+        // Initialize loaders
+        const gltfLoader = new THREE.GLTFLoader();
+        const textureLoader = new THREE.TextureLoader();
+
+        // Storage for all interactive objects
+        const objects = [];
+
+        // Flags and state variables
         let isDetailView = false; // Detail view mode flag
         let previousCameraState = { position: null, target: null }; // Saved camera state
         let selectedObject = null; // Currently selected object for info
         let initialTarget = new THREE.Vector3(); // To store initial target position
 
-        loader.load('Pendants_new.glb', (gltf) => { // Replace with your model file name
-            const rootModel = gltf.scene;
+        // We will store references to all loaded models here
+        const loadedModelsArray = [];
 
-            let index = 0;
-            rootModel.traverse((child) => {
+        // This function arranges all meshes inside a single loaded model from left to right
+        function arrangeMeshesInsideModel(model) {
+            const meshes = [];
+            model.traverse((child) => {
                 if (child.isMesh) {
-                    // Position objects in a row
-                    child.position.set(index * spacing, 0, 0);
-
-                    // Store metadata from userData
-                    const metadata = child.userData;
-                    const name = metadata?.name || "Unknown Name";
-                    const year = metadata?.year || "Unknown Year";
-                    const description = metadata?.description || "No Description";
-
-                    // Optionally, you can store the metadata directly on the object for later use
-                    child.userData = { name, year, description };
-
-                    objects.push(child); // Add object to the array
-                    index++;
+                    meshes.push(child);
                 }
             });
 
-            scene.add(rootModel);
-        }, undefined, (error) => {
-            console.error('An error happened while loading the model:', error);
+            if (meshes.length < 2) return;
+
+            let totalWidth = 0;
+            const boundingBoxes = meshes.map((m) => {
+                const box = new THREE.Box3().setFromObject(m);
+                return { mesh: m, box: box };
+            });
+
+            boundingBoxes.forEach((item) => {
+                const size = item.box.getSize(new THREE.Vector3());
+                totalWidth += size.x;
+            });
+
+            const spacing = 0.5;
+            totalWidth += spacing * (meshes.length - 1);
+
+            let currentX = -totalWidth / 2;
+
+            for (let i = 0; i < boundingBoxes.length; i++) {
+                const item = boundingBoxes[i];
+                const size = item.box.getSize(new THREE.Vector3());
+                const halfWidth = size.x / 2;
+
+                item.mesh.position.x = currentX + halfWidth;
+                currentX += size.x + spacing;
+            }
+        }
+
+        // Function to load a model with optional textures and positioning
+        function loadModel(modelPath, diffusePath = null, normalPath = null, position = new THREE.Vector3(), spacing = 2) {
+            gltfLoader.load(modelPath, (gltf) => {
+                const model = gltf.scene;
+
+                // Apply textures if provided
+                if (diffusePath && normalPath) {
+                    const diffuseTexture = textureLoader.load(diffusePath);
+                    const normalTexture = textureLoader.load(normalPath);
+
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material instanceof THREE.MeshStandardMaterial) {
+                            child.material.map = diffuseTexture;
+                            child.material.normalMap = normalTexture;
+                            child.material.needsUpdate = true;
+                        }
+                    });
+                }
+
+                arrangeMeshesInsideModel(model);
+                model.position.copy(position);
+
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        objects.push(child);
+                    }
+                });
+
+                scene.add(model);
+                loadedModelsArray.push(model);
+                modelsLoaded++;
+
+                if (modelsLoaded === models.length) {
+                    arrangeModelsLeftToRight(loadedModelsArray);
+                    checkAllLoaded();
+                }
+            }, undefined, (error) => {
+                console.error(`An error occurred while loading ${modelPath}:`, error);
+                modelsLoaded++;
+                if (modelsLoaded === models.length) {
+                    arrangeModelsLeftToRight(loadedModelsArray);
+                    checkAllLoaded();
+                }
+            });
+        }
+
+        const models = [
+            {
+                modelPath: 'Pendants_new.glb',
+                diffusePath: null,
+                normalPath: null,
+                position: new THREE.Vector3(-6, 0, 0)
+            },
+            {
+                modelPath: 'objects2.glb',
+                diffusePath: null,
+                normalPath: null,
+                position: new THREE.Vector3(0, 0, 0)
+            },
+            {
+                modelPath: 'objects3.glb',
+                diffusePath: null,
+                normalPath: null,
+                position: new THREE.Vector3(6, 0, 0)
+            }
+        ];
+
+        models.forEach(model => {
+            loadModel(model.modelPath, model.diffusePath, model.normalPath, model.position, 2);
         });
 
-        // OrbitControls for the main scene
+        // Arrange models with increased spacing
+        function arrangeModelsLeftToRight(modelsArray) {
+            const boundingBoxes = modelsArray.map((m) => {
+                const box = new THREE.Box3().setFromObject(m);
+                return box;
+            });
+
+            let currentX = 0;
+            const spacingBetweenModels = 0.3; // Increased spacing to avoid clipping
+
+            for (let i = 0; i < modelsArray.length; i++) {
+                const model = modelsArray[i];
+                const box = boundingBoxes[i];
+                const size = box.getSize(new THREE.Vector3());
+
+                const halfWidth = size.x / 2;
+                model.position.x = currentX + halfWidth;
+                model.position.y = 0;
+                model.position.z = 0;
+
+                currentX += size.x + spacingBetweenModels;
+            }
+        }
+
         const mainControls = new THREE.OrbitControls(mainCamera, renderer.domElement);
         mainControls.enableDamping = true;
         mainControls.dampingFactor = 0.1;
-        mainControls.minDistance = 5; // Minimum zoom
-        mainControls.maxDistance = 15; // Maximum zoom
+        mainControls.minDistance = 5; 
+        mainControls.maxDistance = 30; 
 
-        // Auxiliary camera for detailed view
         const detailCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const detailControls = new THREE.OrbitControls(detailCamera, renderer.domElement);
         detailControls.enableDamping = true;
         detailControls.dampingFactor = 0.1;
-        detailControls.minDistance = 1.5; // Minimum zoom in detailed view
-        detailControls.maxDistance = 5; // Maximum zoom in detailed view
-        detailControls.enablePan = true; // Enable panning
-        detailControls.enableRotate = true; // Allow rotation
-        detailControls.enableZoom = true; // Allow zooming
-        detailControls.screenSpacePanning = false; // Panning in world space
-        detailControls.minPolarAngle = Math.PI / 4; // Prevent camera from going below 45 degrees
-        detailControls.maxPolarAngle = Math.PI / 2; // Prevent camera from going above 90 degrees
-        detailControls.enabled = false; // Disabled by default
+        detailControls.minDistance = 1.5; 
+        detailControls.maxDistance = 5; 
+        detailControls.enablePan = true; 
+        detailControls.enableRotate = true; 
+        detailControls.enableZoom = true; 
+        detailControls.screenSpacePanning = false; 
+        detailControls.minPolarAngle = Math.PI / 4; 
+        detailControls.maxPolarAngle = Math.PI / 2; 
+        detailControls.enabled = false; 
 
-        // Popup Elements
         const popup = document.getElementById('popup');
         const overlay = document.getElementById('overlay');
         const popupTitle = document.getElementById('popup-title');
         const popupYear = document.getElementById('popup-year');
         const popupDescription = document.getElementById('popup-description');
 
-        // Exit Button Elements
         const exitButton = document.getElementById('exitButton');
-
-        // Info Button Elements
         const infoButton = document.getElementById('infoButton');
         const infoPopup = document.getElementById('infoPopup');
         const infoTitle = document.getElementById('info-title');
         const infoYear = document.getElementById('info-year');
         const infoDescription = document.getElementById('info-description');
 
-        // Function to show popup with object details
         function showPopup(object) {
             const metadata = object.userData;
             const name = metadata?.name || "Unknown Name";
@@ -267,13 +401,11 @@
             overlay.style.display = 'block';
         }
 
-        // Function to hide popup
         function hidePopup() {
             popup.style.display = 'none';
             overlay.style.display = 'none';
         }
 
-        // Function to show info popup
         function showInfoPopup(object) {
             const metadata = object.userData;
             const name = metadata?.name || "Unknown Name";
@@ -287,15 +419,12 @@
             infoPopup.style.display = 'block';
         }
 
-        // Function to hide info popup
         function hideInfoPopup() {
             infoPopup.style.display = 'none';
         }
 
-        // Handle Exit Button Click
         exitButton.addEventListener('click', () => {
             if (isDetailView) {
-                // Restore previous camera state
                 isDetailView = false;
                 detailControls.enabled = false;
 
@@ -303,7 +432,6 @@
                 mainControls.target.copy(previousCameraState.target);
                 mainControls.update();
 
-                // Hide buttons and popups
                 exitButton.style.display = 'none';
                 infoButton.style.display = 'none';
                 hidePopup();
@@ -311,7 +439,6 @@
             }
         });
 
-        // Handle Info Button Click
         infoButton.addEventListener('click', () => {
             if (selectedObject) {
                 if (infoPopup.style.display === 'block') {
@@ -322,46 +449,36 @@
             }
         });
 
-        // Logic to switch between main and auxiliary cameras
         window.addEventListener('click', (event) => {
-            // Only handle click if not in detail view
             if (!isDetailView) {
                 const intersects = getIntersects(event.clientX, event.clientY);
                 if (intersects.length > 0) {
                     const clickedObject = intersects[0].object;
                     selectedObject = clickedObject;
 
-                    // Save current camera state
                     previousCameraState.position = mainCamera.position.clone();
                     previousCameraState.target = mainControls.target.clone();
 
-                    // Calculate the bounding box of the clicked object
+                    // Using old logic for close-up view:
                     const boundingBox = new THREE.Box3().setFromObject(clickedObject);
                     const center = boundingBox.getCenter(new THREE.Vector3());
-
-                    // Set initial target to the center
                     initialTarget.copy(center);
                     detailControls.target.copy(initialTarget);
 
-                    // Calculate appropriate camera position
                     const size = boundingBox.getSize(new THREE.Vector3());
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const cameraOffset = maxDim * 2;
                     detailCamera.position.set(center.x, center.y + cameraOffset / 2, center.z + cameraOffset);
 
-                    // Update detailControls
                     detailControls.enabled = true;
                     detailControls.update();
 
-                    // Set flag
                     isDetailView = true;
 
-                    // Show exit and info buttons
                     exitButton.style.display = 'flex';
                     infoButton.style.display = 'flex';
                 }
             } else {
-                // If in detail view and info popup is not open, clicking on empty space should hide the info popup
                 const target = event.target;
                 if (target !== infoPopup && target !== infoButton) {
                     hideInfoPopup();
@@ -369,10 +486,8 @@
             }
         });
 
-        // Handle exiting detailed view via Escape key
         window.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && isDetailView) {
-                // Restore previous camera state
                 isDetailView = false;
                 detailControls.enabled = false;
 
@@ -380,14 +495,13 @@
                 mainControls.target.copy(previousCameraState.target);
                 mainControls.update();
 
-                // Hide buttons and popups
                 exitButton.style.display = 'none';
                 infoButton.style.display = 'none';
                 hidePopup();
                 hideInfoPopup();
             }
         });
-        // Function to get intersected objects based on mouse coordinates
+
         function getIntersects(x, y) {
             const mouse = new THREE.Vector2();
             mouse.x = (x / window.innerWidth) * 2 - 1;
@@ -395,27 +509,21 @@
 
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(mouse, isDetailView ? detailCamera : mainCamera);
-            return raycaster.intersectObjects(objects);
+            return raycaster.intersectObjects(objects, true);
         }
 
-        // Handle clicks on the overlay to hide the main popup
         overlay.addEventListener('click', hidePopup);
 
-        // Implement panning constraints in detailed view
         detailControls.addEventListener('change', () => {
             if (isDetailView) {
-                const maxPanDistance = 2; // Maximum panning distance from initial target
-
-                // Calculate the current distance from the initial target
+                const maxPanDistance = 2;
                 const currentTarget = detailControls.target.clone();
                 const distance = currentTarget.distanceTo(initialTarget);
 
                 if (distance > maxPanDistance) {
-                    // Clamp the target position
                     const clampedTarget = initialTarget.clone().lerp(currentTarget, maxPanDistance / distance);
                     detailControls.target.copy(clampedTarget);
 
-                    // Update the camera position accordingly to maintain the same distance
                     const direction = detailCamera.position.clone().sub(detailControls.target).normalize();
                     const currentDistance = detailCamera.position.distanceTo(detailControls.target);
                     const newPosition = detailControls.target.clone().add(direction.multiplyScalar(currentDistance));
@@ -424,7 +532,6 @@
             }
         });
 
-        // Main animation loop
         function animate() {
             requestAnimationFrame(animate);
 
@@ -438,7 +545,6 @@
         }
         animate();
 
-        // Handle window resizing
         window.addEventListener('resize', () => {
             mainCamera.aspect = window.innerWidth / window.innerHeight;
             mainCamera.updateProjectionMatrix();
@@ -446,6 +552,15 @@
             detailCamera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // Check if all are loaded
+        function checkAllLoaded() {
+            if (hdriLoaded && modelsLoaded === models.length) {
+                // Hide loader
+                loaderElement.style.display = 'none';
+                // Scene is ready
+            }
+        }
     </script>
 </body>
 </html>
