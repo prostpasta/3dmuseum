@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Museum with Viewing and Carousel</title>
+    <title>3D Museum with Centered Detailed View</title>
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <!-- GLTFLoader -->
@@ -148,7 +148,7 @@
     </div>
 
     <script>
-        // Create the main scene, camera, and renderer
+        // Initialize Three.js scene, camera, renderer
         const scene = new THREE.Scene();
         const mainCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         mainCamera.position.set(0, 2, 8);
@@ -163,7 +163,7 @@
 
         // Load HDRI map for lighting using relative path
         const rgbeLoader = new THREE.RGBELoader();
-        rgbeLoader.load('path_to_hdri.hdr', (texture) => { // Relative path
+        rgbeLoader.load('path_to_hdri.hdr', (texture) => { // Replace with your HDRI file name
             texture.mapping = THREE.EquirectangularReflectionMapping; // Use HDRI for lighting
             scene.environment = texture; // Set HDRI map as the lighting source
         });
@@ -172,13 +172,12 @@
         const loader = new THREE.GLTFLoader();
         const spacing = 1; // Reduced spacing between objects
         const objects = []; // Storage for carousel objects
-        let currentIndex = 0; // Current model index
         let isDetailView = false; // Detail view mode flag
         let previousCameraState = { position: null, target: null }; // Saved camera state
         let selectedObject = null; // Currently selected object for info
         let initialTarget = new THREE.Vector3(); // To store initial target position
 
-        loader.load('Pendants_new.glb', (gltf) => { // Relative path
+        loader.load('Pendants_new.glb', (gltf) => { // Replace with your model file name
             const rootModel = gltf.scene;
 
             let index = 0;
@@ -202,6 +201,8 @@
             });
 
             scene.add(rootModel);
+        }, undefined, (error) => {
+            console.error('An error happened while loading the model:', error);
         });
 
         // OrbitControls for the main scene
@@ -286,19 +287,21 @@
 
         // Handle Exit Button Click
         exitButton.addEventListener('click', () => {
-            // Restore previous camera state
-            isDetailView = false;
-            detailControls.enabled = false;
+            if (isDetailView) {
+                // Restore previous camera state
+                isDetailView = false;
+                detailControls.enabled = false;
 
-            mainCamera.position.copy(previousCameraState.position);
-            mainControls.target.copy(previousCameraState.target);
-            mainControls.update();
+                mainCamera.position.copy(previousCameraState.position);
+                mainControls.target.copy(previousCameraState.target);
+                mainControls.update();
 
-            // Hide buttons and popups
-            exitButton.style.display = 'none';
-            infoButton.style.display = 'none';
-            hidePopup();
-            hideInfoPopup();
+                // Hide buttons and popups
+                exitButton.style.display = 'none';
+                infoButton.style.display = 'none';
+                hidePopup();
+                hideInfoPopup();
+            }
         });
 
         // Handle Info Button Click
@@ -325,22 +328,26 @@
                     previousCameraState.position = mainCamera.position.clone();
                     previousCameraState.target = mainControls.target.clone();
 
-                    // Switch to detailed view
-                    isDetailView = true;
-                    detailControls.enabled = true;
-                    detailControls.target.copy(clickedObject.position);
-
-                    // Store the initial target position for panning constraints
-                    initialTarget.copy(detailControls.target);
-
-                    // Position the detail camera relative to the object
+                    // Calculate the bounding box of the clicked object
                     const boundingBox = new THREE.Box3().setFromObject(clickedObject);
                     const center = boundingBox.getCenter(new THREE.Vector3());
+
+                    // Set initial target to the center
+                    initialTarget.copy(center);
+                    detailControls.target.copy(initialTarget);
+
+                    // Calculate appropriate camera position
                     const size = boundingBox.getSize(new THREE.Vector3());
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const cameraOffset = maxDim * 2;
                     detailCamera.position.set(center.x, center.y + cameraOffset / 2, center.z + cameraOffset);
+
+                    // Update detailControls
+                    detailControls.enabled = true;
                     detailControls.update();
+
+                    // Set flag
+                    isDetailView = true;
 
                     // Show exit and info buttons
                     exitButton.style.display = 'flex';
