@@ -65,6 +65,9 @@
             align-items: center;
             justify-content: center;
             z-index: 11;
+            display: flex; /* Ensure flex layout */
+            align-items: center;
+            justify-content: center;
         }
 
         #exitButton:hover {
@@ -87,6 +90,9 @@
             align-items: center;
             justify-content: center;
             z-index: 11;
+            display: flex; /* Ensure flex layout */
+            align-items: center;
+            justify-content: center;
         }
 
         #infoButton:hover {
@@ -166,6 +172,8 @@
         rgbeLoader.load('path_to_hdri.hdr', (texture) => { // Replace with your HDRI file name
             texture.mapping = THREE.EquirectangularReflectionMapping; // Use HDRI for lighting
             scene.environment = texture; // Set HDRI map as the lighting source
+        }, undefined, (error) => {
+            console.error('An error happened while loading the HDRI:', error);
         });
 
         // Load GLTF/GLB model using relative path
@@ -214,7 +222,6 @@
 
         // Auxiliary camera for detailed view
         const detailCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        detailCamera.position.set(0, 1, 3);
         const detailControls = new THREE.OrbitControls(detailCamera, renderer.domElement);
         detailControls.enableDamping = true;
         detailControls.dampingFactor = 0.1;
@@ -381,7 +388,9 @@
             }
         });
 
-        // Support for mobile devices (exit via swipe down)
+        // *** Removed Swipe Exit Functionality ***
+        // The following touch event listeners have been removed to disable exiting detailed view via swipe gestures.
+        /*
         let startY = 0;
         window.addEventListener('touchstart', (event) => {
             startY = event.touches[0].clientY;
@@ -396,7 +405,6 @@
 
                 mainCamera.position.copy(previousCameraState.position);
                 mainControls.target.copy(previousCameraState.target);
-                mainControls.update();
 
                 // Hide buttons and popups
                 exitButton.style.display = 'none';
@@ -405,6 +413,7 @@
                 hideInfoPopup();
             }
         });
+        */
 
         // Function to get intersected objects based on mouse coordinates
         function getIntersects(x, y) {
